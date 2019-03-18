@@ -195,12 +195,13 @@ func (t *table) DelItem(old IItem) error {
 		return fmt.Errorf("%s.DelItem(%d,%s) != CurItem(%d,%s)", t.name, old.NID(), old.UID(), cur.NID(), cur.UID())
 	}
 
-	//make sure this is the current rev
-	if old.Rev().Nr() != cur.Rev().Nr() {
-		return fmt.Errorf("%s.DelItem(%d,%s).Rev.Nr=%d != CurItem().Rev.Nr=%d", t.name, old.NID(), old.UID(), cur.Rev().Nr(), cur.Rev().Nr())
+	//make sure this will be the next rev
+	if old.Rev().Nr() != cur.Rev().Nr()+1 {
+		return fmt.Errorf("%s.DelItem(%d,%s).Rev.Nr=%d should be %d", t.name, old.NID(), old.UID(), old.Rev().Nr(), cur.Rev().Nr()+1)
 	}
 
 	//correct: delete
+	//log.Debugf("Mark as deleted rev %d", old.Rev().Nr())
 	delete(t.items, old.UID())
 	return nil
 }
