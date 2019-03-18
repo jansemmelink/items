@@ -7,13 +7,13 @@ import (
 	"time"
 
 	"github.com/jansemmelink/items"
-	"github.com/jansemmelink/msf/lib/log"
+	"github.com/jansemmelink/log"
 	"github.com/pkg/errors"
 	uuid "github.com/satori/go.uuid"
 )
 
 type sqlTable struct {
-	data.ITable
+	items.ITable
 	conn          *sql.DB
 	tableName     string
 	csvFieldNames string
@@ -45,7 +45,7 @@ func (t *sqlTable) Count() int {
 	return count
 }
 
-func (t *sqlTable) AddItem(itemData data.IData) (data.IItem, error) {
+func (t *sqlTable) AddItem(itemData items.IData) (items.IItem, error) {
 	if t == nil {
 		return nil, fmt.Errorf("nil.AddItem()")
 	}
@@ -59,7 +59,7 @@ func (t *sqlTable) AddItem(itemData data.IData) (data.IItem, error) {
 	//we try to insert the item into the SQL table
 	//and let SQL assign the incrementing ID, while we assign the uid here
 	uid := uuid.NewV1().String()
-	rev := data.Rev(1, time.Now())
+	rev := items.Rev(1, time.Now())
 	values, err := itemValueDef(itemData)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to define %T values for SQL", itemData)
@@ -74,13 +74,13 @@ func (t *sqlTable) AddItem(itemData data.IData) (data.IItem, error) {
 	}
 
 	nid, err := result.LastInsertId()
-	newItem := data.NewItem(t, int(nid), uid, rev, itemData)
+	newItem := items.NewItem(t, int(nid), uid, rev, itemData)
 
 	return newItem, nil
 	//return t.ITable.AddItem(data)
 } //sqlTable.AddItem()
 
-func (t *sqlTable) UpdItem(upd data.IItem) (data.IItem, error) {
+func (t *sqlTable) UpdItem(upd items.IItem) (items.IItem, error) {
 	if t == nil {
 		return nil, fmt.Errorf("nil.UpdItem()")
 	}
@@ -114,11 +114,11 @@ func (t *sqlTable) UpdItem(upd data.IItem) (data.IItem, error) {
 	}
 
 	nid, err := result.LastInsertId()
-	newItem := data.NewItem(t, int(nid), upd.UID(), upd.Rev(), upd.Data())
+	newItem := items.NewItem(t, int(nid), upd.UID(), upd.Rev(), upd.Data())
 	return newItem, nil
 } //sqlTable.UpdItem()
 
-func (t *sqlTable) GetItem(uid string) data.IItem {
+func (t *sqlTable) GetItem(uid string) items.IItem {
 	if t == nil {
 		panic("nil.GetItem()")
 	}
@@ -136,7 +136,7 @@ func (t *sqlTable) GetItem(uid string) data.IItem {
 		return nil
 	}
 
-	itemData := reflect.New(t.Type()).Interface().(data.IData)
+	itemData := reflect.New(t.Type()).Interface().(items.IData)
 	var nid int
 	var revNr int
 	var revTsString string
@@ -157,10 +157,10 @@ func (t *sqlTable) GetItem(uid string) data.IItem {
 		return nil
 	}
 	log.Debugf("Parsed %s.nid=%d,uid=%s: %+v", t.Name(), nid, uid, itemData)
-	return data.NewItem(t, nid, uid, data.Rev(revNr, revTs), itemData)
+	return items.NewItem(t, nid, uid, items.Rev(revNr, revTs), itemData)
 } //sqlTable.GetItem()
 
-func (t *sqlTable) DelItem(old data.IItem) error {
+func (t *sqlTable) DelItem(old items.IItem) error {
 	if t == nil {
 		return fmt.Errorf("nil.DelItem()")
 	}
@@ -299,7 +299,7 @@ func escape(source string) string {
 //itemValues returns an array of pointers to fields in the item
 //that can be populated with sql query result Scan()
 //in the same order as itemFields
-func itemValues(i data.IData) []interface{} {
+func itemValues(i items.IData) []interface{} {
 	//add pointer to each field into list for scanning the SQL result
 	//hard coded, it would look like this:
 	//err := rows.Scan(&bk.Isbn, &bk.Title, &bk.Author, &bk.Price)

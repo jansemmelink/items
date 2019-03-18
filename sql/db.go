@@ -13,7 +13,7 @@ import (
 )
 
 //New ...
-func New(c jsql.Connection) (data.IDb, error) {
+func New(c jsql.Connection) (items.IDb, error) {
 	if err := c.Validate(); err != nil {
 		return nil, errors.Wrapf(err, "invalid sql config")
 	}
@@ -24,19 +24,19 @@ func New(c jsql.Connection) (data.IDb, error) {
 
 	log.Debugf("Connected to %+v", c)
 	return &sqlDatabase{
-		IDb:  data.New(c.Database),
+		IDb:  items.New(c.Database),
 		conn: sqlConn,
 	}, nil
 }
 
-//sqlDatabase extends the default data.Database to store in SQL
+//sqlDatabase extends the default items.Database to store in SQL
 type sqlDatabase struct {
-	data.IDb
+	items.IDb
 	conn *sql.DB
 }
 
-func (db *sqlDatabase) AddTable(t data.ITable) (data.ITable, error) {
-	//we get here to add the table to SQL before it is accepted into the data.IDb that we embed
+func (db *sqlDatabase) AddTable(t items.ITable) (items.ITable, error) {
+	//we get here to add the table to SQL before it is accepted into the items.IDb that we embed
 	log.Debugf("sqlDatabase.AddTable(conn=%v)", db.conn)
 
 	//create a new SQL table or validate the structure of an existing table
@@ -91,7 +91,7 @@ func (db *sqlDatabase) AddTable(t data.ITable) (data.ITable, error) {
 			ITable:        t,
 			conn:          db.conn,
 			tableName:     tableName,
-			csvFieldNames: data.StructFields(t.Type()),
+			csvFieldNames: items.StructFields(t.Type()),
 		},
 	)
 }
