@@ -38,7 +38,7 @@ func (d *Database) Name() string {
 
 //AddTable ...
 func (d *Database) AddTable(t ITable) (ITable, error) {
-	log.Debugf("Database.AddTable()")
+	log.Debugf("Database.AddTable(%s)", t.Name())
 	if d == nil {
 		return nil, fmt.Errorf("nil.AddTable()")
 	}
