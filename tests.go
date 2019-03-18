@@ -10,7 +10,7 @@ import (
 //RunDbTests ...
 func RunDbTests(db IDb) error {
 	log.DebugOn()
-	users, err := db.AddTable(Table("users", user{}))
+	users, err := db.Table("users", user{})
 	if err != nil {
 		return errors.Wrapf(err, "failed to add table")
 	}
@@ -18,13 +18,15 @@ func RunDbTests(db IDb) error {
 	if len(db.Tables()) != 1 {
 		return fmt.Errorf("expected one table")
 	}
-	db.AddTable(Table("sessions", session{}))
+	db.Table("sessions", session{})
 	if len(db.Tables()) != 2 {
 		return fmt.Errorf("expected two tables")
 	}
-	if _, err := db.AddTable(Table("users", user{})); err == nil {
+	if _, err := db.Table("users", user{}); err == nil {
 		return fmt.Errorf("managed to add dup table")
 	}
+
+	users.DelAll()
 
 	u1, err := users.AddItem(user{Name: "one"})
 	if err != nil {

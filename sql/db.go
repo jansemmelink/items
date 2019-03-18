@@ -12,7 +12,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-//New ...
+//New creates a new SQL database with the specified connection configuration
 func New(c jsql.Connection) (items.IDb, error) {
 	if err := c.Validate(); err != nil {
 		return nil, errors.Wrapf(err, "invalid sql config")
@@ -35,12 +35,24 @@ type sqlDatabase struct {
 	conn *sql.DB
 }
 
-func (db *sqlDatabase) AddTable(t items.ITable) (items.ITable, error) {
+func (db *sqlDatabase) Table(name string, tmplStruct items.IData) (items.ITable, error) {
 	//we get here to add the table to SQL before it is accepted into the items.IDb that we embed
 	log.Debugf("sqlDatabase.AddTable(conn=%v)", db.conn)
 
+	//see if can add to the db, but delete if not able to add to SQL
+	t, err := db.IDb.Table(name, tmplStruct)
+	if err != nil {
+		return nil, errors.Wrapf(err, "db(%s).table(%s) failed.", db.Name(), name)
+	}
+
+	defer func() {
+		if t != nil {
+			db.RemTable(t)
+		}
+	}()
+
 	//create a new SQL table or validate the structure of an existing table
-	tableName := "tbl_" + t.Name()
+	tableName := "tbl_" + name
 	existingTableFields, err := jsql.Describe(db.conn, tableName)
 	if err == nil {
 		log.Debugf("Table %s exists with %d fields:", tableName, len(existingTableFields))
@@ -86,14 +98,14 @@ func (db *sqlDatabase) AddTable(t items.ITable) (items.ITable, error) {
 	//SQL happy, call the embedded method to make it part of the database
 	//and wrap the table in an sqlTable so we will be called for all table operations
 	log.Debugf("SQL Table ok. Adding to db...")
-	return db.IDb.AddTable(
-		&sqlTable{
-			ITable:        t,
-			conn:          db.conn,
-			tableName:     tableName,
-			csvFieldNames: items.StructFields(t.Type()),
-		},
-	)
+	st := &sqlTable{
+		ITable:        t,
+		conn:          db.conn,
+		tableName:     tableName,
+		csvFieldNames: items.StructFields(t.Type()),
+	}
+	t = nil
+	return st, nil
 }
 
 func structFieldDefs(structType reflect.Type) (string, error) {

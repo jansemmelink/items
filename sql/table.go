@@ -190,6 +190,20 @@ func (t *sqlTable) DelItem(old items.IItem) error {
 	return nil
 } //sqlTable.DelItem()
 
+func (t *sqlTable) DelAll() error {
+	if t == nil {
+		return fmt.Errorf("nil.DelAll()")
+	}
+
+	//TODO: Does not preserve history - need to insert individuals to be complient!
+	queryStr := fmt.Sprintf("DELETE FROM `%s`", t.tableName)
+	_, err := t.conn.Exec(queryStr)
+	if err != nil {
+		return errors.Wrapf(err, "failed to deleted all from %s", t.Name())
+	}
+	return nil
+}
+
 func itemValueDef(i interface{}) (string, error) {
 	log.Debugf("itemValueDef(%T)", i)
 	t := reflect.TypeOf(i)
