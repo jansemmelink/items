@@ -136,7 +136,8 @@ func (t *sqlTable) GetItem(uid string) items.IItem {
 		return nil
 	}
 
-	itemData := reflect.New(t.Type()).Interface().(items.IData)
+	itemDataPtrValue := reflect.New(t.Type())
+	itemData := itemDataPtrValue.Interface().(items.IData)
 	var nid int
 	var revNr int
 	var revTsString string
@@ -157,7 +158,9 @@ func (t *sqlTable) GetItem(uid string) items.IItem {
 		return nil
 	}
 	log.Debugf("Parsed %s.nid=%d,uid=%s: %+v", t.Name(), nid, uid, itemData)
-	return items.NewItem(t, nid, uid, items.Rev(revNr, revTs), itemData)
+
+	//dereference the itemData to return the struct, not a pointer to the struct:
+	return items.NewItem(t, nid, uid, items.Rev(revNr, revTs), itemDataPtrValue.Elem().Interface().(items.IData))
 } //sqlTable.GetItem()
 
 func (t *sqlTable) DelItem(old items.IItem) error {
@@ -221,7 +224,7 @@ func (t *sqlTable) Index(name string, fieldNames []string) (items.IIndex, error)
 }
 
 func itemValueDef(i interface{}) (string, error) {
-	log.Debugf("itemValueDef(%T)", i)
+	//log.Debugf("itemValueDef(%T)", i)
 	t := reflect.TypeOf(i)
 	v := reflect.ValueOf(i)
 	for t.Kind() == reflect.Ptr {
@@ -233,7 +236,7 @@ func itemValueDef(i interface{}) (string, error) {
 	}
 
 	valueDef := ""
-	log.Debugf("  %T has %d fields", i, v.NumField())
+	//log.Debugf("  %T has %d fields", i, v.NumField())
 	for fieldIndex := 0; fieldIndex < v.NumField(); fieldIndex++ {
 		fieldValue := v.Field(fieldIndex)
 		fieldType := t.Field(fieldIndex)
@@ -241,7 +244,7 @@ func itemValueDef(i interface{}) (string, error) {
 			log.Debugf("  %T.%s cannot be accessed - skip", i, fieldType.Name)
 			continue
 		}
-		log.Debugf("Field[%d]: %+v", fieldIndex, fieldValue)
+		//log.Debugf("Field[%d]: %+v", fieldIndex, fieldValue)
 
 		switch fieldType.Type.Kind() {
 		case reflect.Int, reflect.Float32, reflect.Float64, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
@@ -266,11 +269,11 @@ func itemValueDef(i interface{}) (string, error) {
 	}
 
 	if len(valueDef) == 0 {
-		log.Debugf("itemValueDef(%T) -> \"\"", i)
+		//log.Debugf("itemValueDef(%T) -> \"\"", i)
 		return "", nil
 	}
 
-	log.Debugf("itemValueDef(%T) -> %s", i, valueDef[1:])
+	//log.Debugf("itemValueDef(%T) -> %s", i, valueDef[1:])
 	return valueDef[1:], nil
 }
 
@@ -322,7 +325,7 @@ func escape(source string) string {
 			j = j + 1
 		}
 	}
-	log.Debugf("Escaped \"%s\" -> \"%s\"", source, desc[0:j])
+	//log.Debugf("Escaped \"%s\" -> \"%s\"", source, desc[0:j])
 	return string(desc[0:j])
 }
 

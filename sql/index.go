@@ -30,12 +30,15 @@ func (i *sqlIndex) FindOne(key map[string]interface{}) (items.IItem, error) {
 
 	//get only the latest revNr for the matching key:
 	queryStr := fmt.Sprintf("SELECT nid,uid,revNr,revTs,%s FROM `%s`", t.csvFieldNames, t.tableName)
-	queryStr += fmt.Sprintf(" WHERE ")
+
+	keyString := ""
 	for n, v := range key {
-		queryStr += fmt.Sprintf(" %s=\"%v\"", n, v)
+		keyString += fmt.Sprintf(" AND %s=\"%v\"", n, v)
 		//todo: multi-field index will need "AND" connector
 		//todo: other data types does not need quotes etc...
 	}
+	queryStr += fmt.Sprintf(" WHERE %s", keyString[5:]) //skip over first " AND "
+
 	queryStr += fmt.Sprintf(" ORDER BY revNr DESC LIMIT 1")
 	rows, err := t.conn.Query(queryStr)
 	if err != nil {
@@ -47,7 +50,8 @@ func (i *sqlIndex) FindOne(key map[string]interface{}) (items.IItem, error) {
 		return nil, nil
 	}
 
-	itemData := reflect.New(t.Type()).Interface().(items.IData)
+	itemDataPtrValue := reflect.New(t.Type())
+	itemData := itemDataPtrValue.Interface().(items.IData)
 	var nid int
 	var uid string
 	var revNr int
@@ -67,7 +71,9 @@ func (i *sqlIndex) FindOne(key map[string]interface{}) (items.IItem, error) {
 		return nil, errors.Wrapf(err, "failed to parse revTs=%s into %v: %v", revTsString, revTsFormat, err)
 	}
 	log.Debugf("Parsed %s.nid=%d,uid=%s: %+v", t.Name(), nid, uid, itemData)
-	return items.NewItem(t, nid, uid, items.Rev(revNr, revTs), itemData), nil
+
+	//dereference the itemData to return the struct, not a pointer to the struct:
+	return items.NewItem(t, nid, uid, items.Rev(revNr, revTs), itemDataPtrValue.Elem().Interface().(items.IData)), nil
 }
 
 func (i sqlIndex) Find(key map[string]interface{}) ([]items.IItem, error) {

@@ -11,6 +11,19 @@ import (
 func RunDbTests(db IDb) error {
 	log.DebugOn()
 	log.Debugf("db=%T", db)
+
+	if err := longTest(db); err != nil {
+		return errors.Wrapf(err, "long test failed")
+	}
+
+	if err := twoFieldTest(db); err != nil {
+		return errors.Wrapf(err, "twofield test failed")
+	}
+
+	return nil
+}
+
+func longTest(db IDb) error {
 	users, err := db.Table("users", user{})
 	if err != nil {
 		return errors.Wrapf(err, "failed to add table")
@@ -145,3 +158,118 @@ func (s session) Validate() error {
 	}
 	return nil
 }
+
+type person struct {
+	Name    string
+	Surname string
+}
+
+//Validate ...
+func (p person) Validate() error {
+	return nil
+}
+
+func twoFieldTest(db IDb) error {
+	//create table with two string fields
+	persons, err := db.Table("persons", person{})
+	if err != nil {
+		return errors.Wrapf(err, "failed to add table")
+	}
+	persons.DelAll()
+
+	//both fields must be unique - put them in an index
+	uni, err := persons.Index("unique", []string{"Name", "Surname"})
+	if err != nil {
+		return errors.Wrapf(err, "Failed to add index")
+	}
+
+	//add persons to the db
+	list := []person{
+		{Name: "a", Surname: "b"},
+		{Name: "c", Surname: "d"},
+		{Name: "e", Surname: "f"},
+	}
+	uidList := make([]string, 0)
+	for _, pd := range list {
+		pi, err := persons.AddItem(pd)
+		if err != nil {
+			return errors.Wrapf(err, "Failed to add person=%+v", pd)
+		}
+		uidList = append(uidList, pi.UID())
+	}
+
+	//retriev all by uid
+	for i, uid := range uidList {
+		pi := persons.GetItem(uid)
+		if pi == nil {
+			return fmt.Errorf("Failed to get on uid")
+		}
+		pd := pi.Data().(person)
+		if pd.Name != list[i].Name || pd.Surname != list[i].Surname {
+			return fmt.Errorf("got [%d]uid=%s.%+v != %+v", i, uid, pd, list[i])
+		}
+	}
+
+	//retrieve by name and surname
+	for i, p := range list {
+		pi, err := uni.FindOne(map[string]interface{}{"Name": p.Name, "Surname": p.Surname})
+		if err != nil {
+			return errors.Wrapf(err, "failed to find by name and surname %+v", p)
+		}
+		pd := pi.Data().(person)
+		if pd.Name != p.Name || pd.Surname != p.Surname || pi.UID() != uidList[i] {
+			return fmt.Errorf("got [%d]uid=%s.%+v != %s.%+v", i, pi.UID(), pd, uidList[i], p)
+		}
+	}
+
+	// //update u1
+	// u1, err = u1.Upd(user{"ONE"})
+	// if err != nil {
+	// 	return errors.Wrapf(err, "Failed to rename u1")
+	// }
+	// if u1.Rev().Nr() != 2 {
+	// 	return fmt.Errorf("Rev=%d after update", u1.Rev().Nr())
+	// }
+
+	// gotU1x := users.GetItem(u1.UID())
+	// if gotU1x == nil {
+	// 	return fmt.Errorf("Failed to get ONE")
+	// }
+	// if gotU1x.NID() != u1.NID() || gotU1x.UID() != u1.UID() {
+	// 	return fmt.Errorf("Wrong ids %d!=%d or %s!=%s", gotU1x.NID(), u1.NID(), gotU1x.UID(), u1.UID())
+	// }
+	// if gotU1x.Rev().Nr() != 2 {
+	// 	return fmt.Errorf("Rev=%d != 2", gotU1x.Rev().Nr())
+	// }
+
+	// if users.Count() != 2 {
+	// 	return fmt.Errorf("users.Count=%d", users.Count())
+	// }
+
+	// //should fail to update from old copy
+	// _, err = gotU1.Upd(user{"ONEONE"})
+	// if err == nil {
+	// 	return fmt.Errorf("Should not be able to upd here")
+	// }
+	// log.Debugf("Nice failed to upd from old: %v", err)
+
+	// //should not be able to delete with old, but can del with new
+	// if err = gotU1.Del(); err == nil {
+	// 	return fmt.Errorf("Should not be able to del here")
+	// }
+	// if err = gotU1x.Del(); err != nil {
+	// 	return errors.Wrapf(err, "Failed to del")
+	// }
+	// if err = gotU2.Del(); err != nil {
+	// 	return errors.Wrapf(err, "Failed to del")
+	// }
+
+	// //after del, get should fail:
+	// gotU1y := users.GetItem(u1.UID())
+	// if gotU1y != nil {
+	// 	return fmt.Errorf("Got u1 after deletion")
+	// }
+	// log.Debugf("Good, failed to get u1 after delete")
+
+	return nil
+} //twoFieldTest()
