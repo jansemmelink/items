@@ -29,5 +29,6 @@ func (db *memDatabase) Table(name string, tmplStruct items.IData) (items.ITable,
 		ITable: it,
 		nextID: 1,
 		items:  make(map[string]items.IItem),
+		index:  make(map[string]items.IIndex),
 	}, nil
 }

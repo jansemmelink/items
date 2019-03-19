@@ -204,6 +204,22 @@ func (t *sqlTable) DelAll() error {
 	return nil
 }
 
+func (t *sqlTable) Index(name string, fieldNames []string) (items.IIndex, error) {
+	//for now just return because mysql will find on any field without an index
+	//but this must be created soon to improve performance on large tables
+	//todo!
+	newIndex, err := items.NewIndex(t, name, fieldNames)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to describe index")
+	}
+
+	//add the index to the table
+	si := &sqlIndex{
+		IIndex: newIndex,
+	}
+	return si, nil
+}
+
 func itemValueDef(i interface{}) (string, error) {
 	log.Debugf("itemValueDef(%T)", i)
 	t := reflect.TypeOf(i)

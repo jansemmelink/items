@@ -11,10 +11,11 @@ import (
 )
 
 type memTable struct {
-	mutex sync.Mutex
 	items.ITable
+	mutex  sync.Mutex
 	nextID int
 	items  map[string]items.IItem
+	index  map[string]items.IIndex
 }
 
 func (t *memTable) Count() int {
@@ -38,9 +39,13 @@ func (t *memTable) AddItem(data items.IData) (items.IItem, error) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 
-	//todo: check duplicate keys...
-
 	newItem := items.NewItem(t, t.nextID, uuid.NewV1().String(), items.Rev(1, time.Now()), data)
+	for indexName, index := range t.index {
+		if err := index.Add(newItem); err != nil {
+			return nil, errors.Wrapf(err, "cannot add to index %s", indexName)
+		}
+	}
+
 	t.items[newItem.UID()] = newItem
 	t.nextID++
 	return newItem, nil
@@ -135,4 +140,34 @@ func (t *memTable) Items() map[string]items.IItem {
 func (t *memTable) DelAll() error {
 	t.items = make(map[string]items.IItem)
 	return nil
+}
+
+func (t *memTable) Index(name string, fieldNames []string) (items.IIndex, error) {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+	if _, ok := t.index[name]; ok {
+		return nil, fmt.Errorf("Duplicate db.Table(%s).Index(%s)", t.Name(), name)
+	}
+
+	newIndex, err := items.NewIndex(t, name, fieldNames)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to describe index")
+	}
+
+	//add the index to the table
+	mi := &memIndex{
+		IIndex: newIndex,
+		item:   make(map[string]items.IItem),
+	}
+
+	//if table is not empty, all items must be added to index now
+	for _, item := range t.items {
+		err := mi.Add(item)
+		if err != nil {
+			return nil, errors.Wrapf(err, "cannot add item to index")
+		}
+	}
+
+	t.index[name] = mi
+	return mi, nil
 }

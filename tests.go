@@ -10,10 +10,12 @@ import (
 //RunDbTests ...
 func RunDbTests(db IDb) error {
 	log.DebugOn()
+	log.Debugf("db=%T", db)
 	users, err := db.Table("users", user{})
 	if err != nil {
 		return errors.Wrapf(err, "failed to add table")
 	}
+	log.Debugf("users=%T", users)
 
 	if len(db.Tables()) != 1 {
 		return fmt.Errorf("expected one table")
@@ -27,6 +29,11 @@ func RunDbTests(db IDb) error {
 	}
 
 	users.DelAll()
+
+	uni, err := users.Index("username", []string{"Name"})
+	if err != nil {
+		return errors.Wrapf(err, "Failed to add username index")
+	}
 
 	u1, err := users.AddItem(user{Name: "one"})
 	if err != nil {
@@ -52,6 +59,14 @@ func RunDbTests(db IDb) error {
 	if gotU1.Rev().Nr() != 1 || gotU2.Rev().Nr() != 1 {
 		return fmt.Errorf("Got %d %d", gotU1.Rev().Nr(), gotU2.Rev().Nr())
 	}
+
+	//find by index
+	foundU1, err := uni.FindOne(map[string]interface{}{"Name": "one"})
+	if err != nil {
+		return errors.Wrapf(err, "failed to find u1 by username")
+	}
+	log.Debugf("Got U1: %v", foundU1)
+	log.Debugf("Got foundU1: %+v", foundU1.Data())
 
 	//update u1
 	u1, err = u1.Upd(user{"ONE"})

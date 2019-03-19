@@ -29,7 +29,10 @@ type ITable interface {
 	//get a list of all items at their current latest revision with uid as map index
 	Items() map[string]IItem
 
+	//delete all entries (currently: without keeping revisions, so complete wipe)
 	DelAll() error
+
+	Index(name string, fields []string) (IIndex, error)
 }
 
 //table implements ITable
@@ -85,31 +88,8 @@ func (t *table) DelAll() error {
 	return fmt.Errorf("db(%s).table(%s).DelAll() not implemented", t.db.Name(), t.name)
 }
 
-func (t *table) NewIndex(fieldNames []string) (IIndex, error) {
-	i := index{
-		table:  t,
-		fields: make([]indexField, 0),
-	}
-
-	//make sure fields are unique and defined in the table struct type
-	for _, fn := range fieldNames {
-		//fail if exist
-		for _, iField := range i.fields {
-			if iField.name == fn {
-				return nil, fmt.Errorf("duplicate index field %s on table %s", fn, t.Name())
-			}
-		}
-		structField, ok := t.Type().FieldByName(fn)
-		if !ok {
-			return nil, fmt.Errorf("table %s does not have field %s to use in index", t.Name(), fn)
-		}
-		i.fields = append(i.fields, indexField{
-			name:        fn,
-			structField: structField,
-		})
-	}
-
-	return i, nil
+func (t *table) Index(name string, fields []string) (IIndex, error) {
+	return nil, fmt.Errorf("db(%s).table(%T:%s).Index() not implemented", t.db.Name(), t, t.name)
 }
 
 func (t *table) Count() int {

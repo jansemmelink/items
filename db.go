@@ -20,7 +20,7 @@ type IDb interface {
 	Tables() map[string]ITable
 }
 
-//New database
+//New database should be called by implementation, not by users
 func New(name string) IDb {
 	return &Database{
 		name:   name,
