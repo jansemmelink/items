@@ -20,6 +20,7 @@ type sqlTable struct {
 }
 
 const revTsFormat = "20060102150405.000"
+const defaultTimeFormat = "2006-01-02 15:04:05.000000"
 
 func (t *sqlTable) Count() int {
 	if t == nil {
@@ -141,7 +142,8 @@ func (t *sqlTable) GetItem(uid string) items.IItem {
 	var nid int
 	var revNr int
 	var revTsString string
-	values := append([]interface{}{&nid, &revNr, &revTsString}, itemValues(itemData)...)
+	itemDataValues := itemValues(itemData)
+	values := append([]interface{}{&nid, &revNr, &revTsString}, itemDataValues...)
 	if err = rows.Scan(values...); err != nil {
 		log.Debugf("ERROR: failed to parse SQL row into %v: %v", t.Type(), err)
 		return nil
@@ -158,6 +160,11 @@ func (t *sqlTable) GetItem(uid string) items.IItem {
 		return nil
 	}
 	log.Debugf("Parsed %s.nid=%d,uid=%s: %+v", t.Name(), nid, uid, itemData)
+
+	//parse formatted fields (e.g. time)
+	if err := itemValuesParse(itemData, itemDataValues); err != nil {
+		log.Wrapf(err, "Failed to parse formatted fields read from the table")
+	}
 
 	//dereference the itemData to return the struct, not a pointer to the struct:
 	return items.NewItem(t, nid, uid, items.Rev(revNr, revTs), itemDataPtrValue.Elem().Interface().(items.IData))
@@ -254,7 +261,7 @@ func itemValueDef(i interface{}) (string, error) {
 			switch fieldType.Type {
 			case reflect.TypeOf(time.Time{}):
 				//time value format
-				valueDef += fmt.Sprintf(",%s=\"%s\"", fieldType.Name, fieldValue.Interface().(time.Time).UTC().Format("2006-01-02 15:04:05.000000"))
+				valueDef += fmt.Sprintf(",%s=\"%s\"", fieldType.Name, fieldValue.Interface().(time.Time).UTC().Format(defaultTimeFormat))
 			default:
 				//default to some quoted value
 				//consider encoding JSON here for structs
@@ -345,14 +352,68 @@ func itemValues(i items.IData) []interface{} {
 	//but we get it from reflect:
 	values := make([]interface{}, 0)
 	v := reflect.ValueOf(i).Elem()
-	//t := reflect.TypeOf(i).Elem()
+	t := reflect.TypeOf(i).Elem()
 	for fieldIndex := 0; fieldIndex < v.NumField(); fieldIndex++ {
 		fieldValue := v.Field(fieldIndex)
-		//fieldType := t.Field(fieldIndex)
+		fieldType := t.Field(fieldIndex)
 		if fieldValue.CanSet() {
 			//log.Debugf("Adding field %s...", fieldType.Name)
-			values = append(values, fieldValue.Addr().Interface())
+
+			switch fieldValue.Type() {
+			case reflect.TypeOf(time.Time{}): //todo: change this to use a Parse/Print interface then any type can be changed to use this!
+				//formatted fields (e.g. timestamps)
+				//sql scans into a temporary string value that we have to parse afterwards
+				var dbStringValue string
+				values = append(values, &dbStringValue)
+				log.Debugf("Field %s.%s(%s): Using temp string", t.Name(), fieldType.Name, fieldValue.Type().Name())
+			default:
+				//normal fields - sql scan directly into the struct field addr:
+				values = append(values, fieldValue.Addr().Interface())
+			}
 		}
 	}
 	return values
+}
+
+func itemValuesParse(i items.IData, values []interface{}) error {
+	//this is called after itemValues() above was passed to db reader
+	//and itemValues[] now has the values
+	//the simple values are already copied to itemData in i, but
+	//the formatted values (e.g. time.Time) are still in temp strings
+	//linked in itemValues[...] which we now have to parse
+	//
+	//loop over the fields and use the same switch cases as in itemValues() above:
+	v := reflect.ValueOf(i).Elem()
+	t := reflect.TypeOf(i).Elem()
+	for fieldIndex := 0; fieldIndex < v.NumField(); fieldIndex++ {
+		fieldValue := v.Field(fieldIndex)
+		fieldType := t.Field(fieldIndex)
+		if fieldValue.CanSet() {
+			//log.Debugf("Adding field %s...", fieldType.Name)
+			switch fieldValue.Type() {
+			case reflect.TypeOf(time.Time{}): //todo: change this to use a Parse/Print interface then any type can be changed to use this!
+				//formatted fields (e.g. timestamps)
+				//sql scanned into a temporary string value that we have to parse now:
+				log.Errorf("PARSING %s.%s from \"%s\" into %s",
+					t.Name(),
+					fieldType.Name,
+					*(values[fieldIndex].(*string)),
+					fieldValue.Type().Name())
+				timeValue, err := time.Parse(defaultTimeFormat, *(values[fieldIndex].(*string)))
+				if err != nil {
+					return log.Wrapf(err, "Failed to parse %s.%s=\"%s\" into time value using format %s",
+						t.Name(),
+						fieldType.Name,
+						*(values[fieldIndex].(*string)),
+						defaultTimeFormat)
+				}
+				//store the time value in the itemData
+				fieldValue.Set(reflect.ValueOf(timeValue))
+			default:
+				//normal fields already copied to item data - so do nothing here
+			}
+		}
+	}
+
+	return nil
 }
