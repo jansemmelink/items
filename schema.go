@@ -3,8 +3,6 @@ package items
 import (
 	"fmt"
 	"reflect"
-
-	"github.com/jansemmelink/log"
 )
 
 //ISchema is create from IData to iterate over fields and sub-structures
@@ -26,7 +24,7 @@ func StructFields(t reflect.Type) string {
 	p := reflect.New(t).Interface()
 	v := reflect.ValueOf(p).Elem()
 
-	log.Debugf("StructField(%v) -> t=%v p=%T v=%v", t, t, p, v)
+	//log.Debugf("StructField(%v) -> t=%v p=%T v=%v", t, t, p, v)
 	csvFieldNames := ""
 	for fieldIndex := 0; fieldIndex < t.NumField(); fieldIndex++ {
 		fieldValue := v.Field(fieldIndex)
