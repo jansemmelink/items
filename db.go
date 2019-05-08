@@ -2,20 +2,25 @@ package items
 
 import (
 	"fmt"
+	"reflect"
 	"sync"
 
-	"github.com/jansemmelink/log"
+	//	"github.com/jansemmelink/log"
+	"github.com/pkg/errors"
 )
 
 //IDb to store tables of items
 type IDb interface {
 	Name() string
-	AddTable(t ITable) (ITable, error)
+
+	Table(name string, tmplStruct IData) (ITable, error)
+	MustTable(name string, tmplStruct IData) ITable
+	RemTable(t ITable)
 	GetTable(name string) ITable
 	Tables() map[string]ITable
 }
 
-//New database
+//New database should be called by implementation, not by users
 func New(name string) IDb {
 	return &Database{
 		name:   name,
@@ -36,24 +41,47 @@ func (d *Database) Name() string {
 	return d.name
 }
 
-//AddTable ...
-func (d *Database) AddTable(t ITable) (ITable, error) {
-	log.Debugf("Database.AddTable(%s)", t.Name())
-	if d == nil {
-		return nil, fmt.Errorf("nil.AddTable()")
-	}
-	if t == nil {
-		return nil, fmt.Errorf("Database(%s).AddTable(nil)", d.name)
+//Table ...
+func (d *Database) Table(name string, tmplStruct IData) (ITable, error) {
+	if err := validateIdentifier(name); err != nil {
+		return nil, errors.Wrapf(err, "Database(%s).table(%s) invalid name", d.name, name)
 	}
 
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
+	if _, ok := d.tables[name]; ok {
+		return nil, fmt.Errorf("Database(%s).table(%s) already exists", d.name, name)
+	}
 
-	if _, ok := d.tables[t.Name()]; ok {
-		return nil, fmt.Errorf("Database(%s).table(%s) already exists", d.name, t.Name())
+	schema, err := NewSchema(reflect.TypeOf(tmplStruct))
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot make schema of type %T", tmplStruct)
+	}
+
+	t := &table{
+		db:         d,
+		name:       name,
+		structType: reflect.TypeOf(tmplStruct),
+		schema:     schema,
 	}
 	d.tables[t.Name()] = t
 	return t, nil
+}
+
+//MustTable ...
+func (d *Database) MustTable(name string, tmplStruct IData) ITable {
+	t, err := d.Table(name, tmplStruct)
+	if err != nil {
+		panic(errors.Wrapf(err, "db(%s).table(%s) failed", d.name, name))
+	}
+	return t
+}
+
+//RemTable removes the table
+func (d *Database) RemTable(t ITable) {
+	if d != nil && t != nil {
+		delete(d.tables, t.Name())
+	}
 }
 
 //GetTable ...
