@@ -20,7 +20,9 @@ type sqlTable struct {
 }
 
 const revTsFormat = "20060102150405.000"
-const defaultTimeFormat = "2006-01-02 15:04:05.000000"
+
+//mysql DATETIME type stores this format for the UTC value
+const mysqlTimeFormat = "2006-01-02 15:04:04"
 
 func (t *sqlTable) Count() int {
 	if t == nil {
@@ -128,12 +130,10 @@ func (t *sqlTable) GetItem(uid string) items.IItem {
 	queryStr := fmt.Sprintf("SELECT nid,revNr,revTs,%s FROM `%s` WHERE uid=\"%s\" ORDER BY revNr DESC LIMIT 1", t.csvFieldNames, t.tableName, uid)
 	rows, err := t.conn.Query(queryStr)
 	if err != nil {
-		log.Debugf("ERROR: failed to get %s.uid=%s: sql=%s: %v", t.Name(), uid, queryStr, err)
 		return nil
 	}
 
 	if !rows.Next() {
-		log.Debugf("%s.uid=%s not found", t.Name(), uid)
 		return nil
 	}
 
@@ -145,7 +145,6 @@ func (t *sqlTable) GetItem(uid string) items.IItem {
 	itemDataValues := itemValues(itemData)
 	values := append([]interface{}{&nid, &revNr, &revTsString}, itemDataValues...)
 	if err = rows.Scan(values...); err != nil {
-		log.Debugf("ERROR: failed to parse SQL row into %v: %v", t.Type(), err)
 		return nil
 	}
 
@@ -159,8 +158,6 @@ func (t *sqlTable) GetItem(uid string) items.IItem {
 		log.Errorf("ERROR: failed to parse revTs=%s into %v: %v", revTsString, revTsFormat, err)
 		return nil
 	}
-	log.Debugf("Parsed %s.nid=%d,uid=%s: %+v", t.Name(), nid, uid, itemData)
-
 	//parse formatted fields (e.g. time)
 	if err := itemValuesParse(itemData, itemDataValues); err != nil {
 		log.Wrapf(err, "Failed to parse formatted fields read from the table")
@@ -231,7 +228,6 @@ func (t *sqlTable) Index(name string, fieldNames []string) (items.IIndex, error)
 }
 
 func itemValueDef(i interface{}) (string, error) {
-	//log.Debugf("itemValueDef(%T)", i)
 	t := reflect.TypeOf(i)
 	v := reflect.ValueOf(i)
 	for t.Kind() == reflect.Ptr {
@@ -243,15 +239,12 @@ func itemValueDef(i interface{}) (string, error) {
 	}
 
 	valueDef := ""
-	//log.Debugf("  %T has %d fields", i, v.NumField())
 	for fieldIndex := 0; fieldIndex < v.NumField(); fieldIndex++ {
 		fieldValue := v.Field(fieldIndex)
 		fieldType := t.Field(fieldIndex)
 		if !fieldValue.CanInterface() {
-			log.Debugf("  %T.%s cannot be accessed - skip", i, fieldType.Name)
 			continue
 		}
-		//log.Debugf("Field[%d]: %+v", fieldIndex, fieldValue)
 
 		switch fieldType.Type.Kind() {
 		case reflect.Int, reflect.Float32, reflect.Float64, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
@@ -261,7 +254,7 @@ func itemValueDef(i interface{}) (string, error) {
 			switch fieldType.Type {
 			case reflect.TypeOf(time.Time{}):
 				//time value format
-				valueDef += fmt.Sprintf(",%s=\"%s\"", fieldType.Name, fieldValue.Interface().(time.Time).UTC().Format(defaultTimeFormat))
+				valueDef += fmt.Sprintf(",%s=\"%s\"", fieldType.Name, fieldValue.Interface().(time.Time).UTC().Format(mysqlTimeFormat))
 			default:
 				//default to some quoted value
 				//consider encoding JSON here for structs
@@ -274,13 +267,9 @@ func itemValueDef(i interface{}) (string, error) {
 			valueDef += fmt.Sprintf(",%s=\"%v\"", fieldType.Name, escape(valueStr))
 		}
 	}
-
 	if len(valueDef) == 0 {
-		//log.Debugf("itemValueDef(%T) -> \"\"", i)
 		return "", nil
 	}
-
-	//log.Debugf("itemValueDef(%T) -> %s", i, valueDef[1:])
 	return valueDef[1:], nil
 }
 
@@ -332,7 +321,6 @@ func escape(source string) string {
 			j = j + 1
 		}
 	}
-	//log.Debugf("Escaped \"%s\" -> \"%s\"", source, desc[0:j])
 	return string(desc[0:j])
 }
 
@@ -352,20 +340,17 @@ func itemValues(i items.IData) []interface{} {
 	//but we get it from reflect:
 	values := make([]interface{}, 0)
 	v := reflect.ValueOf(i).Elem()
-	t := reflect.TypeOf(i).Elem()
+	//t := reflect.TypeOf(i).Elem()
 	for fieldIndex := 0; fieldIndex < v.NumField(); fieldIndex++ {
 		fieldValue := v.Field(fieldIndex)
-		fieldType := t.Field(fieldIndex)
+		//fieldType := t.Field(fieldIndex)
 		if fieldValue.CanSet() {
-			//log.Debugf("Adding field %s...", fieldType.Name)
-
 			switch fieldValue.Type() {
 			case reflect.TypeOf(time.Time{}): //todo: change this to use a Parse/Print interface then any type can be changed to use this!
 				//formatted fields (e.g. timestamps)
 				//sql scans into a temporary string value that we have to parse afterwards
 				var dbStringValue string
 				values = append(values, &dbStringValue)
-				log.Debugf("Field %s.%s(%s): Using temp string", t.Name(), fieldType.Name, fieldValue.Type().Name())
 			default:
 				//normal fields - sql scan directly into the struct field addr:
 				values = append(values, fieldValue.Addr().Interface())
@@ -389,24 +374,20 @@ func itemValuesParse(i items.IData, values []interface{}) error {
 		fieldValue := v.Field(fieldIndex)
 		fieldType := t.Field(fieldIndex)
 		if fieldValue.CanSet() {
-			//log.Debugf("Adding field %s...", fieldType.Name)
 			switch fieldValue.Type() {
 			case reflect.TypeOf(time.Time{}): //todo: change this to use a Parse/Print interface then any type can be changed to use this!
 				//formatted fields (e.g. timestamps)
 				//sql scanned into a temporary string value that we have to parse now:
-				log.Errorf("PARSING %s.%s from \"%s\" into %s",
-					t.Name(),
-					fieldType.Name,
-					*(values[fieldIndex].(*string)),
-					fieldValue.Type().Name())
-				timeValue, err := time.Parse(defaultTimeFormat, *(values[fieldIndex].(*string)))
+				timeValue, err := time.Parse(mysqlTimeFormat, *(values[fieldIndex].(*string)))
 				if err != nil {
 					return log.Wrapf(err, "Failed to parse %s.%s=\"%s\" into time value using format %s",
 						t.Name(),
 						fieldType.Name,
 						*(values[fieldIndex].(*string)),
-						defaultTimeFormat)
+						mysqlTimeFormat)
 				}
+				//convert from UTC to local time
+				timeValue = timeValue.Local()
 				//store the time value in the itemData
 				fieldValue.Set(reflect.ValueOf(timeValue))
 			default:

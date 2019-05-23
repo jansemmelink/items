@@ -21,7 +21,6 @@ func (i *sqlIndex) Add(item items.IItem) error {
 }
 
 func (i *sqlIndex) FindOne(key map[string]interface{}) (items.IItem, error) {
-	log.Debugf("Finding one %+v", key)
 	//find in tbl, sql will use the index
 	if i == nil || key == nil {
 		return nil, fmt.Errorf("sqlIndex.FindOne()")
@@ -31,8 +30,6 @@ func (i *sqlIndex) FindOne(key map[string]interface{}) (items.IItem, error) {
 
 	//get only the latest revNr for the matching key:
 	queryStr := fmt.Sprintf("SELECT nid,uid,revNr,revTs,%s FROM `%s`", t.csvFieldNames, t.tableName)
-	log.Debugf("Q: %s", queryStr)
-
 	keyString := ""
 	for n, v := range key {
 		keyString += fmt.Sprintf(" AND %s=\"%v\"", n, v)
@@ -40,18 +37,13 @@ func (i *sqlIndex) FindOne(key map[string]interface{}) (items.IItem, error) {
 		//todo: other data types does not need quotes etc...
 	}
 	queryStr += fmt.Sprintf(" WHERE %s", keyString[5:]) //skip over first " AND "
-	log.Debugf("Q: %s", queryStr)
-
 	queryStr += fmt.Sprintf(" ORDER BY revNr DESC LIMIT 1")
-	log.Debugf("Q: %s", queryStr)
-
 	rows, err := t.conn.Query(queryStr)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get %s.(%+v): sql=%s", t.Name(), key, queryStr)
 	}
 
 	if !rows.Next() {
-		log.Debugf("%s.(%+v) not found", t.Name(), key)
 		return nil, nil
 	}
 
@@ -76,8 +68,6 @@ func (i *sqlIndex) FindOne(key map[string]interface{}) (items.IItem, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to parse revTs=%s into %v: %v", revTsString, revTsFormat, err)
 	}
-	log.Debugf("Parsed %s.nid=%d,uid=%s: %+v", t.Name(), nid, uid, itemData)
-
 	if err := itemValuesParse(itemData, itemDataValues); err != nil {
 		log.Wrapf(err, "Failed to parse formatted fields read from the table")
 	}

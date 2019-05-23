@@ -128,7 +128,6 @@ func (t *memTable) DelItem(old items.IItem) error {
 	}
 
 	//correct: delete
-	//log.Debugf("Mark as deleted rev %d", old.Rev().Nr())
 	delete(t.items, old.UID())
 	return nil
 }

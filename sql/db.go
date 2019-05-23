@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/jansemmelink/items"
-	"github.com/jansemmelink/log"
 	jsql "github.com/jansemmelink/sql"
 	"github.com/pkg/errors"
 )
@@ -22,7 +21,6 @@ func New(c jsql.Connection) (items.IDb, error) {
 		return nil, errors.Wrapf(err, "failed to connect")
 	}
 
-	log.Debugf("Connected to %+v", c)
 	return &sqlDatabase{
 		IDb:  items.New(c.Database),
 		conn: sqlConn,
@@ -37,8 +35,6 @@ type sqlDatabase struct {
 
 func (db *sqlDatabase) Table(name string, tmplStruct items.IData) (items.ITable, error) {
 	//we get here to add the table to SQL before it is accepted into the items.IDb that we embed
-	log.Debugf("sqlDatabase.AddTable(conn=%v)", db.conn)
-
 	//see if can add to the db, but delete if not able to add to SQL
 	t, err := db.IDb.Table(name, tmplStruct)
 	if err != nil {
@@ -53,17 +49,15 @@ func (db *sqlDatabase) Table(name string, tmplStruct items.IData) (items.ITable,
 
 	//create a new SQL table or validate the structure of an existing table
 	tableName := "tbl_" + name
-	existingTableFields, err := jsql.Describe(db.conn, tableName)
+	/*existingTableFields*/ _, err = jsql.Describe(db.conn, tableName)
 	if err == nil {
-		log.Debugf("Table %s exists with %d fields:", tableName, len(existingTableFields))
 		//table exists
 		//todo: compare with what we expect
-		for i, tfd := range existingTableFields {
-			log.Errorf("   TODO compare existing SQL table field[%d]: %+v", i, tfd)
-		}
+		// for i, tfd := range existingTableFields {
+		// 	log.Errorf("   TODO compare existing SQL table field[%d]: %+v", i, tfd)
+		// }
 	} else {
 		//table does not exist, create
-		log.Debugf("Creating table %s ...:", tableName)
 		fieldDefs, err := structFieldDefs(t.Type())
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to describe %s as SQL table fields", tableName)
@@ -85,19 +79,13 @@ func (db *sqlDatabase) Table(name string, tmplStruct items.IData) (items.ITable,
 		//end of table definition
 		sqlQuery += ") ENGINE=InnoDB DEFAULT CHARSET=utf8"
 
-		rows, err := db.conn.Query(sqlQuery)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to create table %s: %s", tableName, sqlQuery)
-		}
-		for rows.Next() {
-			cols, _ := rows.Columns()
-			log.Debugf("Got a row: %+v", cols)
 		}
 	}
 
 	//SQL happy, call the embedded method to make it part of the database
 	//and wrap the table in an sqlTable so we will be called for all table operations
-	log.Debugf("SQL Table ok. Adding to db...")
 	st := &sqlTable{
 		ITable:        t,
 		conn:          db.conn,
@@ -113,7 +101,6 @@ func structFieldDefs(structType reflect.Type) (string, error) {
 	for fieldIndex := 0; fieldIndex < structType.NumField(); fieldIndex++ {
 		//fieldValue := v.Field(fieldIndex)
 		structField := structType.Field(fieldIndex)
-		log.Debugf("Field[%d]: %+v", fieldIndex, structField.Name)
 		// structField.CanInterface()
 
 		sqlType := ""
@@ -143,10 +130,7 @@ func structFieldDefs(structType reflect.Type) (string, error) {
 		fieldDef += fmt.Sprintf(",%s %s %s", structField.Name, sqlType, sqlOptions)
 	}
 	if len(fieldDef) < 1 {
-		log.Debugf("%v sql def: \"\"", structType.Name())
 		return "", nil
 	}
-
-	log.Debugf("%v sql def: %s", structType.Name(), fieldDef[1:])
 	return fieldDef[1:], nil
 }

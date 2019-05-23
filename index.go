@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/jansemmelink/log"
+	//"github.com/jansemmelink/log"
 	"github.com/pkg/errors"
 )
 
@@ -93,7 +93,7 @@ func (i index) ItemKey(item IItem) IKey {
 	for _, f := range i.fields {
 		keyValue := itemDataValue.Field(f.index).Interface()
 		key = key.With(f.name, keyValue)
-		log.Debugf("key(%s)=%v", f.name, keyValue)
+		//log.Debugf("key(%s)=%v", f.name, keyValue)
 	}
 	return key
 }
@@ -103,7 +103,7 @@ func (i index) MapKey(m map[string]interface{}) IKey {
 	for _, f := range i.fields {
 		keyValue := m[f.name]
 		key = key.With(f.name, keyValue)
-		log.Debugf("key(%s)=%v", f.name, keyValue)
+		//log.Debugf("key(%s)=%v", f.name, keyValue)
 	}
 	return key
 }

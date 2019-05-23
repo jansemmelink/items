@@ -40,7 +40,6 @@ func longTest(db IDb) error {
 	if _, err := db.Table("users", user{}); err == nil {
 		return fmt.Errorf("managed to add dup table")
 	}
-
 	users.DelAll()
 
 	uni, err := users.Index("username", []string{"Name"})
@@ -59,7 +58,6 @@ func longTest(db IDb) error {
 	if users.Count() != 1 {
 		return fmt.Errorf("users.Count=%d", users.Count())
 	}
-
 	u2, err := users.AddItem(user{Name: "two"})
 	if err != nil {
 		return errors.Wrapf(err, "Failed to add user two")
