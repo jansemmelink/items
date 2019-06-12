@@ -121,6 +121,62 @@ func (t *sqlTable) UpdItem(upd items.IItem) (items.IItem, error) {
 	return newItem, nil
 } //sqlTable.UpdItem()
 
+func (t *sqlTable) GetItemByKey(key map[string]interface{}) items.IItem {
+	if t == nil {
+		panic("nil.GetItemByKey()")
+	}
+
+	//write the filter
+	filter := ""
+	for n, v := range key {
+		if len(filter) > 0 {
+			filter += " AND "
+		}
+		filter += fmt.Sprintf("%s=\"%v\"", n, v)
+	}
+
+	//get only the latest revNr:
+	queryStr := fmt.Sprintf("SELECT uid,nid,revNr,revTs,%s FROM `%s` WHERE "+filter+" ORDER BY revNr DESC LIMIT 1", t.csvFieldNames, t.tableName)
+	rows, err := t.conn.Query(queryStr)
+	if err != nil {
+		return nil
+	}
+
+	if !rows.Next() {
+		return nil
+	}
+
+	itemDataPtrValue := reflect.New(t.Type())
+	itemData := itemDataPtrValue.Interface().(items.IData)
+	var uid string
+	var nid int
+	var revNr int
+	var revTsString string
+	itemDataValues := itemValues(itemData)
+	values := append([]interface{}{&uid, &nid, &revNr, &revTsString}, itemDataValues...)
+	if err = rows.Scan(values...); err != nil {
+		return nil
+	}
+
+	//if revTsString ends with ".DEL", the item was deleted
+	if revTsString[14:] == ".DEL" {
+		return nil
+	}
+
+	revTs, err := time.Parse(revTsFormat, revTsString)
+	if err != nil {
+		log.Errorf("ERROR: failed to parse revTs=%s into %v: %v", revTsString, revTsFormat, err)
+		return nil
+	}
+	//parse formatted fields (e.g. time)
+	if err := itemValuesParse(itemData, itemDataValues); err != nil {
+		log.Wrapf(err, "Failed to parse formatted fields read from the table")
+	}
+
+	//dereference the itemData to return the struct, not a pointer to the struct:
+	return items.NewItem(t, nid, uid, items.Rev(revNr, revTs), itemDataPtrValue.Elem().Interface().(items.IData))
+}
+
 func (t *sqlTable) GetItem(uid string) items.IItem {
 	if t == nil {
 		panic("nil.GetItem()")
@@ -178,7 +234,6 @@ func (t *sqlTable) DelItem(old items.IItem) error {
 	//mark as deleted by changing the last 3 digits of timestamp to be "DEL"
 	delTs := old.Rev().Timestamp().UTC().Format(revTsFormat)
 	delTs = delTs[0:14] + ".DEL"
-
 	values, err := itemValueDef(old.Data())
 	if err != nil {
 		return errors.Wrapf(err, "failed to define %s values for SQL", t.Name())
@@ -188,7 +243,7 @@ func (t *sqlTable) DelItem(old items.IItem) error {
 	//marked as deleted. It will fail if done with an old rev, not the latest
 	queryStr := fmt.Sprintf("INSERT INTO `%s` SET", t.tableName)
 	queryStr += fmt.Sprintf(" uid=\"%s\"", old.UID())
-	queryStr += fmt.Sprintf(",revNr=%d,revTs=\"%s\"", old.Rev().Nr(), delTs)
+	queryStr += fmt.Sprintf(",revNr=%d,revTs=\"%s\"", old.Rev().Nr()+1, delTs)
 	queryStr += "," + values
 	_, err = t.conn.Exec(queryStr)
 	if err != nil {

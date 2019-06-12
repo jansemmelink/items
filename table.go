@@ -23,6 +23,9 @@ type ITable interface {
 	//get the latest revision of the specified item
 	GetItem(uid string) IItem
 
+	//get item using any field values
+	GetItemByKey(key map[string]interface{}) IItem
+
 	//delete all revisions of the specified item (fail if not the latest revision anymore)
 	DelItem(i IItem) error
 
@@ -74,6 +77,10 @@ func (t *table) UpdItem(upd IItem) (IItem, error) {
 
 func (t *table) GetItem(uid string) IItem {
 	return nil //, fmt.Errorf("db(%s).table(%s).GetItem() not implemented", t.db.Name(), t.name)
+}
+
+func (t *table) GetItemByKey(map[string]interface{}) IItem {
+	return nil //, fmt.Errorf("db(%s).table(%s).GetItemByKey() not implemented", t.db.Name(), t.name)
 }
 
 func (t *table) DelItem(old IItem) error {
