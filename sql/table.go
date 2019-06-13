@@ -36,7 +36,7 @@ func (t *sqlTable) Count() int {
 		return 0
 	}
 	if !rows.Next() {
-		log.Errorf("No row from counting %s with: %s", t.Name(), queryStr)
+		//log.Errorf("No row from counting %s with: %s", t.Name(), queryStr)
 		return 0
 	}
 

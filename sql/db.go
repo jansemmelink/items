@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jansemmelink/items"
+	"github.com/jansemmelink/log"
 	jsql "github.com/jansemmelink/sql"
 	"github.com/pkg/errors"
 )
@@ -53,6 +54,7 @@ func (db *sqlDatabase) Table(name string, tmplStruct items.IData) (items.ITable,
 	if err == nil {
 		//table exists
 		//todo: compare with what we expect
+		// log.Debugf("Table(%s) already exists", tableName)
 		// for i, tfd := range existingTableFields {
 		// 	log.Errorf("   TODO compare existing SQL table field[%d]: %+v", i, tfd)
 		// }
@@ -79,9 +81,12 @@ func (db *sqlDatabase) Table(name string, tmplStruct items.IData) (items.ITable,
 		//end of table definition
 		sqlQuery += ") ENGINE=InnoDB DEFAULT CHARSET=utf8"
 
+		_, err = db.conn.Exec(sqlQuery)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to create table %s: %s", tableName, sqlQuery)
 		}
+
+		log.Debugf("Created table(%s): %s", tableName, sqlQuery)
 	}
 
 	//SQL happy, call the embedded method to make it part of the database
